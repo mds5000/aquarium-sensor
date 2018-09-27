@@ -174,7 +174,10 @@ uint16_t ControlEndpoint::get_descriptor(uint16_t value) {
             return sizeof(UsbDeviceProtocolDescriptor);
         case USB_DTYPE_Configuration:
             std::memcpy(ep_in, &usb_config_descriptor, sizeof(UsbConfigurationDescriptor));
-            return sizeof(UsbConfigurationDescriptor);
+            std::memcpy(ep_in + sizeof(UsbConfigurationDescriptor), &usb_interface_descriptor, sizeof(UsbInterfaceDescriptor));
+            std::memcpy(ep_in + sizeof(UsbConfigurationDescriptor) + sizeof(UsbInterfaceDescriptor),
+                        &usb_endpoint_descriptor, sizeof(UsbEndpointDescriptor));
+            return sizeof(UsbConfigurationDescriptor) + sizeof(UsbInterfaceDescriptor) + sizeof(UsbEndpointDescriptor);
         case USB_DTYPE_Interface:
             std::memcpy(ep_in, &usb_interface_descriptor, sizeof(UsbInterfaceDescriptor));
             return sizeof(UsbInterfaceDescriptor);

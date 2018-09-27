@@ -9,8 +9,8 @@ UsbDeviceProtocolDescriptor usb_device_descriptor{
     .bDeviceSubClass = 0,
     .bDeviceProtocol = 0,
     .bMaxPacketSize = 64,
-    .idVendor = 0x1234,
-    .idProduct = 0x0001,
+    .idVendor = 0x1209,
+    .idProduct = 0x1986,
     .bcdDevice = 0x0100,
     .iManufacturer = 1,
     .iProduct = 2,
@@ -26,7 +26,7 @@ UsbConfigurationDescriptor usb_config_descriptor{
     .bConfigurationValue = 1,
     .iConfiguration = 4,
     .bmAttributes = 0xC0, /* Self-Powered */
-    .bMaxPower = 0
+    .bMaxPower = 50
 };
 
 UsbInterfaceDescriptor usb_interface_descriptor{
