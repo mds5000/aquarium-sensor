@@ -58,12 +58,18 @@ CDEPENDENCIES=$(foreach sdir,$(SOURCE_DIRS),$(patsubst $(sdir)/%.c,$(DEPENDENCY_
 CPPDEPENDENCIES=$(foreach sdir,$(SOURCE_DIRS),$(patsubst $(sdir)/%.cpp,$(DEPENDENCY_DIR)/$(SOURCE_DIR)/%.d,$(shell find $(sdir) -type f -name "*.cpp")))
 DEPENDENCIES=$(CDEPENDENCIES) $(CPPDEPENDENCIES)
 
-.PHONY: all clean
+.PHONY: all clean program
 
 all: $(BINARY_DIR)/$(APP).elf
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+$(BINARY_DIR)/flash.jlink:
+	printf "\nconnect\nloadbin $(BINARY_DIR)/$(APP).bin, 0\nr\ng\nexit\n" > $@
+
+program: $(BINARY_DIR)/flash.jlink
+	JLinkExe -device at$(CHIP) -if SWD -speed 4000 $<
 
 $(BINARY_DIR)/$(APP).elf: $(OBJECTS)
 	$(DIR_GUARD)
