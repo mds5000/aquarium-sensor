@@ -9,8 +9,8 @@ UsbDeviceProtocolDescriptor usb_device_descriptor{
     .bDeviceSubClass = 0,
     .bDeviceProtocol = 0,
     .bMaxPacketSize = 64,
-    .idVendor = 0x1234,
-    .idProduct = 0x0001,
+    .idVendor = 0x1209,
+    .idProduct = 0x1986,
     .bcdDevice = 0x0100,
     .iManufacturer = 1,
     .iProduct = 2,
@@ -21,12 +21,14 @@ UsbDeviceProtocolDescriptor usb_device_descriptor{
 UsbConfigurationDescriptor usb_config_descriptor{
     .bLength = sizeof(UsbConfigurationDescriptor),
     .bDescriptorType = 0x02,
-    .wTotalLength = sizeof(UsbConfigurationDescriptor) + sizeof(UsbInterfaceDescriptor) + sizeof(UsbEndpointDescriptor),
+    .wTotalLength = sizeof(UsbConfigurationDescriptor)
+                  + sizeof(UsbInterfaceDescriptor)
+                  + 2 * sizeof(UsbEndpointDescriptor),
     .bNumInterfaces = 1,
     .bConfigurationValue = 1,
     .iConfiguration = 4,
     .bmAttributes = 0xC0, /* Self-Powered */
-    .bMaxPower = 0
+    .bMaxPower = 50       /* 100mA */
 };
 
 UsbInterfaceDescriptor usb_interface_descriptor{
@@ -34,14 +36,23 @@ UsbInterfaceDescriptor usb_interface_descriptor{
     .bDescriptorType = 0x04,
     .bInterfaceNumber = 0,
     .bAlternateSetting = 0,
-    .bNumEndpoints = 1,
+    .bNumEndpoints = 2,
     .bInterfaceClass = 0xFF,
     .bInterfaceSubClass = 0xFF,
     .bInterfaceProtocol = 0xFF,
     .iInterface = 5 
 };
 
-UsbEndpointDescriptor usb_endpoint_descriptor{
+UsbEndpointDescriptor usb_out_endpoint_descriptor{
+    .bLength = sizeof(UsbEndpointDescriptor),
+    .bDescriptorType = 0x05,
+    .bEndpointAddress = 0x01,
+    .bmAttributes = 0x3, /* Interrupt Endpoint */
+    .wMaxPacketSize = 64,
+    .bInterval = 1
+};
+
+UsbEndpointDescriptor usb_in_endpoint_descriptor{
     .bLength = sizeof(UsbEndpointDescriptor),
     .bDescriptorType = 0x05,
     .bEndpointAddress = 0x81,

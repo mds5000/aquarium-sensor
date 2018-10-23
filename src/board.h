@@ -21,5 +21,7 @@ extern Gpio gpio_temp;
 extern Gpio led_red;
 extern Gpio led_green;
 
+extern Gpio usb_vsense;
+
 
 #endif /* BOARD_H */

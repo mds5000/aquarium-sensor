@@ -1,7 +1,7 @@
 #ifndef USB_H
 #define USB_H
 
-#include <vector>
+#include <array>
 
 #include "debug.h"
 
@@ -15,22 +15,19 @@ class UsbController {
 public:
     UsbController();
 
-    void initialize(const UsbSpeed speed);
-    void add_endpoint(uint8_t number, uint8_t type, uint16_t size);
+    void initialize(uint8_t speed);
     void attach();
     void detach();
     void reset();
+    bool is_attached();
 
-    void commit_address();
+    UsbDeviceDescriptor* get_descriptor(uint8_t num);
 
-    ControlEndpoint* ep0;
+    ControlEndpoint ep0;
+    UsbEndpoint* endpoints[USB_NUM_ENDPOINTS];
+
 private:
-    UsbDeviceDescriptor ep_desciptors[USB_NUM_ENDPOINTS];
-    std::vector<UsbEndpoint*> endpoints;
-
-    uint8_t address;
-
-
+    UsbDeviceDescriptor ep_descriptors[USB_NUM_ENDPOINTS+1];
 };
 
 extern UsbController usb;

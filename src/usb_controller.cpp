@@ -16,8 +16,7 @@ UsbController usb;
 
 UsbController::UsbController() {
     /* Clear endpoint memory */
-    std::memset(ep_desciptors, 0, USB_NUM_ENDPOINTS*sizeof(UsbDeviceDescriptor));
-    ep0 = new ControlEndpoint(&ep_desciptors[0]);
+    std::memset(ep_descriptors, 0, (USB_NUM_ENDPOINTS+1)*sizeof(UsbDeviceDescriptor));
 
     /* Setup SOF 1khz I/O */
     PORT->Group[0].PMUX[11].bit.PMUXO = 6;
@@ -29,7 +28,7 @@ UsbController::UsbController() {
     PORT->Group[0].PINCFG[25].bit.PMUXEN = 1;
 }
 
-void UsbController::initialize(const UsbSpeed speed) {
+void UsbController::initialize(uint8_t speed) {
     /* Load USB Pad Calibration Values */
     uint16_t pad_transn = (*NVM_CAL & USB_TRANSN_MASK) >> USB_TRANSN_SHIFT;
     uint16_t pad_transp = (*NVM_CAL & USB_TRANSP_MASK) >> USB_TRANSP_SHIFT;
@@ -42,17 +41,16 @@ void UsbController::initialize(const UsbSpeed speed) {
     USB->DEVICE.QOSCTRL.bit.CQOS = 3;
     USB->DEVICE.QOSCTRL.bit.DQOS = 3;
 
-    USB->DEVICE.CTRLB.bit.SPDCONF = (uint8_t)speed;
-	USB->DEVICE.DESCADD.reg = (uint32_t)(&ep_desciptors[0]);
+    USB->DEVICE.CTRLB.bit.SPDCONF = speed;
+	USB->DEVICE.DESCADD.reg = (uint32_t)(&ep_descriptors[0]);
 
-    /* Reset & Enable */
     reset();
-    attach();
 }
 
 void UsbController::detach(void) {
 	USB->DEVICE.CTRLB.bit.DETACH = 1;
 	NVIC_DisableIRQ(USB_IRQn);
+    reset();
 }
 
 void UsbController::attach(void) {
@@ -60,26 +58,27 @@ void UsbController::attach(void) {
 	USB->DEVICE.CTRLB.bit.DETACH = 0;
 }
 
+bool UsbController::is_attached() { 
+    return USB->DEVICE.CTRLB.bit.DETACH == 0;
+}
+
+UsbDeviceDescriptor* UsbController::get_descriptor(uint8_t num) {
+    return &usb.ep_descriptors[num];
+}
+
 void UsbController::reset() {
     /* Reset Endpoints */
-    ep0->reset();
-    for (auto& ep : endpoints) {
-        ep->reset();
+    ep0.reset();
+    for (int i = 0; i < USB_NUM_ENDPOINTS; i++) {
+        endpoints[i]->reset();
     }
 
-    ep0->enable();
-    ep0->enable_setup();
+    ep0.enable();
+    ep0.enable_setup();
 
 	USB->DEVICE.INTENSET.reg = USB_DEVICE_INTENSET_EORST;
     USB->DEVICE.CTRLA.bit.ENABLE = 1;
 }
-
-void UsbController::commit_address() {
-    debug("Updated USB Device Address (%d)", ep0->address);
-    USB->DEVICE.DADD.reg = USB_DEVICE_DADD_ADDEN | USB_DEVICE_DADD_DADD(ep0->address);
-    ep0->address = 0;
-}
-
 
 /**
  * USB Interrupt Handler
@@ -98,24 +97,38 @@ void USB_Handler() {
     /* Handle Control Endpoint */
     if (epflags & 1) {
 		uint32_t flags = USB->DEVICE.DeviceEndpoint[0].EPINTFLAG.reg;
-		USB->DEVICE.DeviceEndpoint[0].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1 | USB_DEVICE_EPINTFLAG_TRCPT0 | USB_DEVICE_EPINTFLAG_RXSTP;
+		USB->DEVICE.DeviceEndpoint[0].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1
+                                                    | USB_DEVICE_EPINTFLAG_TRCPT0
+                                                    | USB_DEVICE_EPINTFLAG_RXSTP;
         debug("EP0: 0x%x", flags);
 
 		if (flags & USB_DEVICE_EPINTFLAG_RXSTP) {
-            usb.ep0->handle_setup();
-        }
-
-        if (flags & USB_DEVICE_EPINTFLAG_TRCPT0 ) {
-            debug("OUT_0");
+            usb.ep0.handle_setup();
         }
 
         if (flags & USB_DEVICE_EPINTFLAG_TRCPT1 ) {
-            if (usb.ep0->address) {
-                usb.commit_address();
+            if (usb.ep0.address) {
+                usb.ep0.commit_address();
             }
-            debug("IN_0");
         }
     }
 
     /* Handle Application Endpoints */
+    for (int i = 1; i <= USB_NUM_ENDPOINTS; i++) {
+        if (epflags & 1 << i) {
+            uint32_t flags = USB->DEVICE.DeviceEndpoint[i].EPINTFLAG.reg;
+            USB->DEVICE.DeviceEndpoint[i].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1
+                                                        | USB_DEVICE_EPINTFLAG_TRCPT0
+                                                        | USB_DEVICE_EPINTFLAG_RXSTP;
+            debug("EP%d: 0x%x", i, flags);
+
+            if (flags & USB_DEVICE_EPINTFLAG_TRCPT0 ) {
+                debug("OUT_%d", i);
+            }
+
+            if (flags & USB_DEVICE_EPINTFLAG_TRCPT1 ) {
+                debug("IN_%d", i);
+            }
+        }
+    }
 }
