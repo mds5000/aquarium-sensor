@@ -85,17 +85,8 @@ void initialize_system() {
     /* Confiugre LED I/O */
     led_green.direction(true);
     led_red.direction(true);
-    led_green.output(1);
 
-}
-
-void die() {
-    while (1) {
-        led_red.output(1);
-        delay_us(50000);
-        led_red.output(0);
-        delay_us(50000);
-    }
+    usb_vsense.direction(false);
 }
 
 int main(void)
@@ -119,5 +110,21 @@ int main(void)
     int x = (val & 0x0F) * 625;
     SEGGER_RTT_printf(0, "OK: %d.%04d", val/16, x);
 
-    die();
+    while(true) {
+        led_green.output(usb.is_attached());
+        if (!usb.is_attached()) {
+            if (usb_vsense.read()) {
+                usb.attach();
+            }
+        } else {
+            if (!usb_vsense.read()) {
+                usb.detach();
+            }
+        }
+
+        led_red.output(1);
+        delay_us(50000);
+        led_red.output(0);
+        delay_us(50000);
+    }
 }

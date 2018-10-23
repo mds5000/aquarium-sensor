@@ -4,23 +4,18 @@
 
 #include "usb_conf.h"
 #include "usb_controller.h"
+
 extern UsbController usb;
 
-UsbEndpoint::UsbEndpoint(UsbDeviceDescriptor *ep_base, uint8_t number_, uint8_t type_, uint16_t size) 
+
+UsbEndpoint::UsbEndpoint(uint8_t number_, uint8_t type_, uint16_t size) 
   : number(number_ & 0x3f), ep_type(type_), buffer_size(size)
 {
     dev = &USB->DEVICE.DeviceEndpoint[number];
-    out_desc = &ep_base->DeviceDescBank[0];
-    in_desc = &ep_base->DeviceDescBank[1];
+    out_desc = &usb.get_descriptor(number)->DeviceDescBank[0];
+    in_desc = &usb.get_descriptor(number)->DeviceDescBank[1];
 
     debug("EP%d: %x, %x, %x", number, dev, out_desc, in_desc);
-
-    ep_in = new char[size];
-    ep_out = new char[size];
-
-    if (!ep_in || !ep_out) {
-        trace("FAILED TO ALLOCATE MEMORY");
-    }
 }
 
 void UsbEndpoint::reset() {
@@ -30,35 +25,33 @@ void UsbEndpoint::reset() {
 
 void UsbEndpoint::enable() {
     in_desc->PCKSIZE.bit.SIZE = calc_size(buffer_size);
-    in_desc->ADDR.reg = (uint32_t) ep_in;
     dev->EPCFG.bit.EPTYPE1 = ep_type + 1;
     dev->EPSTATUSCLR.reg = USB_DEVICE_EPSTATUS_BK1RDY
                          | USB_DEVICE_EPSTATUS_STALLRQ(0x2)
                          | USB_DEVICE_EPSTATUS_DTGLIN;
 
     out_desc->PCKSIZE.bit.SIZE = calc_size(buffer_size);
-    out_desc->ADDR.reg = (uint32_t) ep_out;
     dev->EPCFG.bit.EPTYPE0 = ep_type + 1;
     dev->EPSTATUSSET.reg = USB_DEVICE_EPSTATUS_BK0RDY;
     dev->EPSTATUSCLR.reg = USB_DEVICE_EPSTATUS_STALLRQ(0x1)
                          | USB_DEVICE_EPSTATUS_DTGLOUT;
 }
 
-void UsbEndpoint::start_out(int len) {
+void UsbEndpoint::start_out(char* data_dest, int len) {
     out_desc->PCKSIZE.bit.MULTI_PACKET_SIZE = len;
     out_desc->PCKSIZE.bit.BYTE_COUNT = 0;
-    out_desc->ADDR.reg = (uint32_t)ep_out;
+    out_desc->ADDR.reg = (uint32_t)data_dest;
 
     dev->EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT0 | USB_DEVICE_EPINTFLAG_TRFAIL0;
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT0;
     dev->EPSTATUSCLR.reg = USB_DEVICE_EPSTATUS_BK0RDY;
 }
 
-void UsbEndpoint::start_in(int len, bool zlp) {
+void UsbEndpoint::start_in(const char* data_src, int len, bool zlp) {
     in_desc->PCKSIZE.bit.AUTO_ZLP = zlp;
     in_desc->PCKSIZE.bit.MULTI_PACKET_SIZE = 0;
     in_desc->PCKSIZE.bit.BYTE_COUNT = len;
-    in_desc->ADDR.reg = (uint32_t)ep_in;
+    in_desc->ADDR.reg = (uint32_t)data_src;
 
     dev->EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1 | USB_DEVICE_EPINTFLAG_TRFAIL1;
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT1;
@@ -101,17 +94,15 @@ void ControlEndpoint::handle_setup() {
     int len = 0;
     switch (setup_packet.bRequest) {
         case USB_REQ_GetStatus:
-            ep_in = "\x00\x00";
-            start_in(2);
+            start_in("\x00\x00", 2);
             start_out();
             return;
         case USB_REQ_ClearFeature:
         case USB_REQ_SetFeature:
         case USB_REQ_SetAddress:
             address = setup_packet.wValue & 0x7F;
-            start_in(0);
+            start_in(NULL, 0);
             start_out();
-            debug("Set Address");
             return;
         case USB_REQ_GetDescriptor:
             len = get_descriptor(setup_packet.wValue);
@@ -119,13 +110,13 @@ void ControlEndpoint::handle_setup() {
                 start_stall();
                 return;
             }
-            start_in(len);
+            start_in(ep_in, len);
             start_out();
             debug("Sent Descriptor: %d", len);
             return;
         case USB_REQ_GetConfiguration:
             ep_in[0] = (char)get_configuration();
-            start_in(1);
+            start_in(ep_in, 1);
             start_out();
             return;
         case USB_REQ_SetConfiguration:
@@ -133,7 +124,7 @@ void ControlEndpoint::handle_setup() {
                 start_stall();
                 return;
             }
-            start_in(0);
+            start_in(NULL, 0);
             start_out();
             return;
         case USB_REQ_SetInterface:
@@ -141,20 +132,26 @@ void ControlEndpoint::handle_setup() {
                 start_stall();
                 return;
             }
-            start_in(0);
+            start_in(NULL, 0);
             start_out();
             return;
     }
 }
 
+void ControlEndpoint::commit_address() {
+    debug("Updated USB Device Address (%d)", address);
+    USB->DEVICE.DADD.reg = USB_DEVICE_DADD_ADDEN | USB_DEVICE_DADD_DADD(address);
+    address = 0;
+}
+
 uint8_t ControlEndpoint::generate_string_descriptor(uint16_t index) {
-    const char * string = usb_string_descriptor_table[index];
+    const char* string = usb_string_descriptor_table[index];
     uint8_t len = std::strlen(string);
 
     ep_in[0] = (len)*2 + 2;
     ep_in[1] = 0x03;
 
-    uint16_t * ep_ptr = (uint16_t*)ep_in + 1;
+    uint16_t* ep_ptr = (uint16_t*)ep_in + 1;
     for (int i=0; i<len; i++) {
         ep_ptr[i] = string[i];
     }
@@ -172,24 +169,40 @@ uint16_t ControlEndpoint::get_descriptor(uint16_t value) {
         case USB_DTYPE_Device:
             std::memcpy(ep_in, &usb_device_descriptor, sizeof(UsbDeviceProtocolDescriptor));
             return sizeof(UsbDeviceProtocolDescriptor);
+
         case USB_DTYPE_Configuration:
             std::memcpy(ep_in, &usb_config_descriptor, sizeof(UsbConfigurationDescriptor));
-            std::memcpy(ep_in + sizeof(UsbConfigurationDescriptor), &usb_interface_descriptor, sizeof(UsbInterfaceDescriptor));
-            std::memcpy(ep_in + sizeof(UsbConfigurationDescriptor) + sizeof(UsbInterfaceDescriptor),
-                        &usb_endpoint_descriptor, sizeof(UsbEndpointDescriptor));
-            return sizeof(UsbConfigurationDescriptor) + sizeof(UsbInterfaceDescriptor) + sizeof(UsbEndpointDescriptor);
+            std::memcpy(ep_in + sizeof(UsbConfigurationDescriptor),
+                        &usb_interface_descriptor, sizeof(UsbInterfaceDescriptor));
+            std::memcpy(ep_in + sizeof(UsbConfigurationDescriptor)
+                              + sizeof(UsbInterfaceDescriptor),
+                        &usb_out_endpoint_descriptor, sizeof(UsbEndpointDescriptor));
+            std::memcpy(ep_in + sizeof(UsbConfigurationDescriptor)
+                              + sizeof(UsbInterfaceDescriptor)
+                              + sizeof(UsbEndpointDescriptor),
+                        &usb_in_endpoint_descriptor, sizeof(UsbEndpointDescriptor));
+            return sizeof(UsbConfigurationDescriptor) +
+                   sizeof(UsbInterfaceDescriptor) +
+                   2 * sizeof(UsbEndpointDescriptor);
+
         case USB_DTYPE_Interface:
             std::memcpy(ep_in, &usb_interface_descriptor, sizeof(UsbInterfaceDescriptor));
             return sizeof(UsbInterfaceDescriptor);
+
         case USB_DTYPE_Endpoint:
-            std::memcpy(ep_in, &usb_endpoint_descriptor, sizeof(UsbEndpointDescriptor));
+            if (index == 0)
+                std::memcpy(ep_in, &usb_out_endpoint_descriptor, sizeof(UsbEndpointDescriptor));
+            else
+                std::memcpy(ep_in, &usb_in_endpoint_descriptor, sizeof(UsbEndpointDescriptor));
             return sizeof(UsbEndpointDescriptor);
+
         case USB_DTYPE_String:
             if (index == 0) {
                 std::memcpy(ep_in, &usb_string_descriptor, usb_string_descriptor.bLength);
                 return usb_string_descriptor.bLength;
             }
             return generate_string_descriptor(index);
+
         default:
             return 0;
     }

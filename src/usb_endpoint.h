@@ -6,19 +6,24 @@
 #include "sam.h"
 #include "usb_protocol.h"
 
+constexpr auto CONTROL_EP_SIZE = 64;
+
+
 class UsbEndpoint {
 public:
-    UsbEndpoint(UsbDeviceDescriptor *ep_base, uint8_t number, uint8_t type, const uint16_t size);
+    UsbEndpoint(uint8_t number, uint8_t type, const uint16_t size);
 
-    void start_out(int len=0);
-    void start_in(int len, bool zlp=true);
+    void start_out(char* data_dest=nullptr, int len=0);
+    void start_in(const char* data_src, int len, bool zlp=true);
     void start_stall();
 
     void enable();
     void reset();
 
-    bool ready();
-    bool pending();
+    void handle_out(char* message, int len) {
+        debug("USB EP: ");
+        SEGGER_RTT_Write(0, message, len);
+    }
 
 protected:
     static uint8_t calc_size(int size);
@@ -35,18 +40,17 @@ protected:
     UsbDeviceDescBank * out_desc;
     UsbDeviceDescBank * in_desc;
     
-    char *ep_in;
-    char *ep_out;
 };
 
 
 class ControlEndpoint : public UsbEndpoint {
 public:
-    ControlEndpoint(UsbDeviceDescriptor *ep_base) 
-    : UsbEndpoint(ep_base, 0, USB_EP_TYPE_CONTROL, 64) {}
+    ControlEndpoint()
+    : UsbEndpoint(0, USB_EP_TYPE_CONTROL, CONTROL_EP_SIZE) {}
 
     void enable_setup();
     void handle_setup();
+    void commit_address();
 
     bool set_configuration(uint16_t value) { return true; }
     bool set_interface(uint16_t index, uint16_t value) { return true; }
@@ -58,6 +62,8 @@ public:
 
     uint8_t address;
 
+    char ep_in[CONTROL_EP_SIZE];
+    char ep_out[CONTROL_EP_SIZE];
 };
 
 #endif /* USB_ENDPOINT_H */
