@@ -85,6 +85,8 @@ void ControlEndpoint::enable() {
     UsbEndpoint::enable();
     address = 0;
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_RXSTP;
+    in_desc->ADDR.reg = (uint32_t)ep_in;
+    out_desc->ADDR.reg = (uint32_t)ep_out;
 }
 
 void ControlEndpoint::handle_setup() {
@@ -104,9 +106,13 @@ void ControlEndpoint::handle_setup() {
     switch (setup_packet.bRequest) {
         case USB_REQ_GetStatus:
             debug("Setup: Get Status");
+<<<<<<< HEAD
             ep_in[0] = 0;
             ep_in[1] = 0;
             start_in(2);
+=======
+            start_in("\x00\x00", 2);
+>>>>>>> c14af423f04b389c4fbc8f03d6ac11209586ee86
             start_out();
             return;
         case USB_REQ_ClearFeature:

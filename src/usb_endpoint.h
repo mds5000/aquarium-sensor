@@ -63,10 +63,15 @@ public:
     uint8_t address;
 };
 
+<<<<<<< HEAD
 class InterruptEndpoint : public UsbEndpoint {
 public:
     InterruptEndpoint(uint8_t number) 
     : UsbEndpoint(number, USB_EP_TYPE_INTERRUPT, EP_SIZE) {}
+=======
+    char ep_in[CONTROL_EP_SIZE] __attribute__ ((aligned (4)));
+    char ep_out[CONTROL_EP_SIZE] __attribute__ ((aligned (4)));
+>>>>>>> c14af423f04b389c4fbc8f03d6ac11209586ee86
 };
 
 #endif /* USB_ENDPOINT_H */

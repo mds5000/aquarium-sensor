@@ -76,9 +76,15 @@ UsbDeviceDescriptor* UsbController::get_descriptor(uint8_t num) {
 void UsbController::reset() {
     debug("USB Reset...");
     /* Reset Endpoints */
+<<<<<<< HEAD
     for (auto& ep: endpoints) {
         ep->reset();
         ep->enable();
+=======
+    ep0.reset();
+    for (int i = 0; i < USB_NUM_ENDPOINTS; i++) {
+    //    endpoints[i]->reset();
+>>>>>>> c14af423f04b389c4fbc8f03d6ac11209586ee86
     }
 
 	USB->DEVICE.INTENSET.reg = USB_DEVICE_INTENSET_EORST;
@@ -106,6 +112,12 @@ void USB_Handler() {
 		USB->DEVICE.DeviceEndpoint[0].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1
                                                     | USB_DEVICE_EPINTFLAG_TRCPT0
                                                     | USB_DEVICE_EPINTFLAG_RXSTP;
+        if (flags & USB_DEVICE_EPINTFLAG_TRFAIL0)
+            debug("EP0: 0x%x: TRFAIL 0", flags);
+        if (flags & USB_DEVICE_EPINTFLAG_TRFAIL1)
+            debug("EP0: 0x%x: TRFAIL 1", flags);
+
+
         debug("EP0: 0x%x", flags);
 
 		if (flags & USB_DEVICE_EPINTFLAG_RXSTP) {
@@ -113,8 +125,13 @@ void USB_Handler() {
         }
 
         if (flags & USB_DEVICE_EPINTFLAG_TRCPT1 && !(flags & USB_DEVICE_EPINTFLAG_TRFAIL1)) {
+<<<<<<< HEAD
             if (ep0->address) {
                 ep0->commit_address();
+=======
+            if (usb.ep0.address) {
+                usb.ep0.commit_address();
+>>>>>>> c14af423f04b389c4fbc8f03d6ac11209586ee86
             }
         }
     }
