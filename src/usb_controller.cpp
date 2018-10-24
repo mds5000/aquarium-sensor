@@ -45,15 +45,18 @@ void UsbController::initialize(uint8_t speed) {
 	USB->DEVICE.DESCADD.reg = (uint32_t)(&ep_descriptors[0]);
 
     reset();
+    debug("USB Initialization complete.");
 }
 
 void UsbController::detach(void) {
+    debug("USB Detached...");
 	USB->DEVICE.CTRLB.bit.DETACH = 1;
 	NVIC_DisableIRQ(USB_IRQn);
     reset();
 }
 
 void UsbController::attach(void) {
+    debug("USB Attached...");
 	NVIC_EnableIRQ(USB_IRQn);
 	USB->DEVICE.CTRLB.bit.DETACH = 0;
 }
@@ -67,10 +70,11 @@ UsbDeviceDescriptor* UsbController::get_descriptor(uint8_t num) {
 }
 
 void UsbController::reset() {
+    debug("USB Reset...");
     /* Reset Endpoints */
     ep0.reset();
     for (int i = 0; i < USB_NUM_ENDPOINTS; i++) {
-        endpoints[i]->reset();
+    //    endpoints[i]->reset();
     }
 
     ep0.enable();
@@ -100,13 +104,19 @@ void USB_Handler() {
 		USB->DEVICE.DeviceEndpoint[0].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1
                                                     | USB_DEVICE_EPINTFLAG_TRCPT0
                                                     | USB_DEVICE_EPINTFLAG_RXSTP;
+        if (flags & USB_DEVICE_EPINTFLAG_TRFAIL0)
+            debug("EP0: 0x%x: TRFAIL 0", flags);
+        if (flags & USB_DEVICE_EPINTFLAG_TRFAIL1)
+            debug("EP0: 0x%x: TRFAIL 1", flags);
+
+
         debug("EP0: 0x%x", flags);
 
 		if (flags & USB_DEVICE_EPINTFLAG_RXSTP) {
             usb.ep0.handle_setup();
         }
 
-        if (flags & USB_DEVICE_EPINTFLAG_TRCPT1 ) {
+        if (flags & USB_DEVICE_EPINTFLAG_TRCPT1 && !(flags & USB_DEVICE_EPINTFLAG_TRFAIL1)) {
             if (usb.ep0.address) {
                 usb.ep0.commit_address();
             }

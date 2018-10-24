@@ -7,6 +7,17 @@
 
 extern UsbController usb;
 
+void debug_hex(char *buf, int len) {
+    int i = 0;
+    for(i; i < len; i += 8) {
+        SEGGER_RTT_printf(0, "%04x: %02x", i, buf[i]);
+        for(int j=i+1; j < len && j < i + 8; j++) {
+            SEGGER_RTT_printf(0, " %02x", buf[j]);
+        }
+        SEGGER_RTT_printf(0, "\r\n");
+    }
+}
+
 
 UsbEndpoint::UsbEndpoint(uint8_t number_, uint8_t type_, uint16_t size) 
   : number(number_ & 0x3f), ep_type(type_), buffer_size(size)
@@ -76,6 +87,8 @@ uint8_t UsbEndpoint::calc_size(int size) {
 void ControlEndpoint::enable_setup() {
     address = 0;
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_RXSTP;
+    in_desc->ADDR.reg = (uint32_t)ep_in;
+    out_desc->ADDR.reg = (uint32_t)ep_out;
 }
 
 void ControlEndpoint::handle_setup() {
@@ -94,14 +107,18 @@ void ControlEndpoint::handle_setup() {
     int len = 0;
     switch (setup_packet.bRequest) {
         case USB_REQ_GetStatus:
-            start_in("\x00\x00", 2);
+            debug("Setup: Get Status");
+            ep_in[0] = 0;
+            ep_in[1] = 0;
+            start_in(ep_in, 2);
             start_out();
             return;
         case USB_REQ_ClearFeature:
         case USB_REQ_SetFeature:
         case USB_REQ_SetAddress:
+            debug("Setup: Set Address");
             address = setup_packet.wValue & 0x7F;
-            start_in(NULL, 0);
+            start_in(ep_in, 0);
             start_out();
             return;
         case USB_REQ_GetDescriptor:
@@ -113,28 +130,36 @@ void ControlEndpoint::handle_setup() {
             start_in(ep_in, len);
             start_out();
             debug("Sent Descriptor: %d", len);
+            debug("EP_IN:");
+            debug_hex(ep_in, 32);
+            debug("EP_IN END");
             return;
         case USB_REQ_GetConfiguration:
+            debug("Setup: Get Configuration");
             ep_in[0] = (char)get_configuration();
             start_in(ep_in, 1);
             start_out();
             return;
         case USB_REQ_SetConfiguration:
+            debug("Setup: Set Configuration");
             if (!set_configuration(setup_packet.wValue)) {
                 start_stall();
                 return;
             }
-            start_in(NULL, 0);
+            start_in(ep_in, 0);
             start_out();
             return;
         case USB_REQ_SetInterface:
+            debug("Setup: Set Interface");
             if (!set_interface(setup_packet.wIndex, setup_packet.wValue)) {
                 start_stall();
                 return;
             }
-            start_in(NULL, 0);
+            start_in(ep_in, 0);
             start_out();
             return;
+        default:
+            debug("Bad SETUP Request.");
     }
 }
 

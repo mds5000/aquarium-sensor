@@ -8,7 +8,7 @@ Gpio gpio_temp = Gpio(GROUP_A, 9);
 Gpio led_red = Gpio(GROUP_A, 14);
 Gpio led_green = Gpio(GROUP_A, 15);
 
-Gpio usb_vsense = Gpio(GROUP_A, 10);
+Gpio usb_vsense = Gpio(GROUP_A, 22);
 
 __attribute__((section(".ramfunc"))) void delay_us(uint32_t us)
 {

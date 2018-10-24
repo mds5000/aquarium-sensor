@@ -62,8 +62,8 @@ public:
 
     uint8_t address;
 
-    char ep_in[CONTROL_EP_SIZE];
-    char ep_out[CONTROL_EP_SIZE];
+    char ep_in[CONTROL_EP_SIZE] __attribute__ ((aligned (4)));
+    char ep_out[CONTROL_EP_SIZE] __attribute__ ((aligned (4)));
 };
 
 #endif /* USB_ENDPOINT_H */
