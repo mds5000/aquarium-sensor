@@ -62,6 +62,7 @@ void initialize_system() {
     debug("DFLLVAL: 0x%x", OSCCTRL->DFLLVAL.reg);
 
     while (!OSCCTRL->STATUS.bit.DFLLRDY) {};
+    debug("DFLLRDY: ready.");
 
     /* Configure MCLK */
     MCLK->BUPDIV.bit.BUPDIV = 8;
@@ -95,6 +96,7 @@ int main(void)
     /* Initialize the SAM system */
     SystemInit();
     initialize_system();
+    debug("INIT COMPLETE.");
 
     usb.initialize(USB_SPEED_LOW);
 
