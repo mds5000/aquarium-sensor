@@ -6,21 +6,21 @@
 #include "sam.h"
 #include "usb_protocol.h"
 
-constexpr auto CONTROL_EP_SIZE = 64;
+constexpr auto EP_SIZE = 64;
 
 
 class UsbEndpoint {
 public:
     UsbEndpoint(uint8_t number, uint8_t type, const uint16_t size);
 
-    void start_out(char* data_dest=nullptr, int len=0);
-    void start_in(const char* data_src, int len, bool zlp=true);
+    void start_out(int len=0);
+    void start_in(int len, bool zlp=true);
     void start_stall();
 
-    void enable();
+    virtual void enable();
     void reset();
 
-    void handle_out(char* message, int len) {
+    virtual void handle_out(char* message, int len) {
         debug("USB EP: ");
         SEGGER_RTT_Write(0, message, len);
     }
@@ -28,27 +28,27 @@ public:
 protected:
     static uint8_t calc_size(int size);
 
-    /* Endpoint Number */
-    const uint8_t number;
     const uint8_t ep_type;
     const int buffer_size;
 
     /* Const pointer to a volatile endpoint registers */
-    UsbDeviceEndpoint volatile * dev;
+    volatile UsbDeviceEndpoint * const dev;
 
     /* Const pointer to Endpoint Desciptors */
-    UsbDeviceDescBank * out_desc;
-    UsbDeviceDescBank * in_desc;
-    
+    UsbDeviceDescBank * const out_desc;
+    UsbDeviceDescBank * const in_desc;
+
+    char ep_in[EP_SIZE] __attribute__ ((aligned (4)));
+    char ep_out[EP_SIZE] __attribute__ ((aligned (4)));
 };
 
 
 class ControlEndpoint : public UsbEndpoint {
 public:
     ControlEndpoint()
-    : UsbEndpoint(0, USB_EP_TYPE_CONTROL, CONTROL_EP_SIZE) {}
+    : UsbEndpoint(0, USB_EP_TYPE_CONTROL, EP_SIZE) {}
 
-    void enable_setup();
+    void enable() override;
     void handle_setup();
     void commit_address();
 
@@ -61,9 +61,12 @@ public:
     uint8_t generate_string_descriptor(uint16_t index);
 
     uint8_t address;
+};
 
-    char ep_in[CONTROL_EP_SIZE] __attribute__ ((aligned (4)));
-    char ep_out[CONTROL_EP_SIZE] __attribute__ ((aligned (4)));
+class InterruptEndpoint : public UsbEndpoint {
+public:
+    InterruptEndpoint(uint8_t number) 
+    : UsbEndpoint(number, USB_EP_TYPE_INTERRUPT, EP_SIZE) {}
 };
 
 #endif /* USB_ENDPOINT_H */

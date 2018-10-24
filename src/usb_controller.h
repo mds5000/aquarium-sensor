@@ -9,7 +9,11 @@
 #include "usb_protocol.h"
 #include "usb_endpoint.h"
 
-constexpr uint8_t USB_NUM_ENDPOINTS = 2;
+constexpr uint8_t USB_NUM_ENDPOINTS = 3;
+
+extern ControlEndpoint ep0;
+extern InterruptEndpoint app_in;
+extern InterruptEndpoint app_out;
 
 class UsbController {
 public:
@@ -22,12 +26,10 @@ public:
     bool is_attached();
 
     UsbDeviceDescriptor* get_descriptor(uint8_t num);
-
-    ControlEndpoint ep0;
-    UsbEndpoint* endpoints[USB_NUM_ENDPOINTS];
+    std::array<UsbEndpoint*, USB_NUM_ENDPOINTS> endpoints{{&ep0, &app_in, &app_out}};
 
 private:
-    UsbDeviceDescriptor ep_descriptors[USB_NUM_ENDPOINTS+1];
+    UsbDeviceDescriptor ep_descriptors[USB_NUM_ENDPOINTS];
 };
 
 extern UsbController usb;

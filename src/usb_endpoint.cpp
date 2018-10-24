@@ -19,15 +19,12 @@ void debug_hex(char *buf, int len) {
 }
 
 
-UsbEndpoint::UsbEndpoint(uint8_t number_, uint8_t type_, uint16_t size) 
-  : number(number_ & 0x3f), ep_type(type_), buffer_size(size)
-{
-    dev = &USB->DEVICE.DeviceEndpoint[number];
-    out_desc = &usb.get_descriptor(number)->DeviceDescBank[0];
-    in_desc = &usb.get_descriptor(number)->DeviceDescBank[1];
-
-    debug("EP%d: %x, %x, %x", number, dev, out_desc, in_desc);
-}
+UsbEndpoint::UsbEndpoint(uint8_t number, uint8_t type_, uint16_t size) 
+  : ep_type(type_), buffer_size(size),
+    out_desc(&usb.get_descriptor(number)->DeviceDescBank[0]),
+    in_desc(&usb.get_descriptor(number)->DeviceDescBank[1]),
+    dev(&USB->DEVICE.DeviceEndpoint[number])
+{}
 
 void UsbEndpoint::reset() {
     dev->EPSTATUSCLR.reg = USB_DEVICE_EPSTATUS_BK1RDY;
@@ -48,21 +45,21 @@ void UsbEndpoint::enable() {
                          | USB_DEVICE_EPSTATUS_DTGLOUT;
 }
 
-void UsbEndpoint::start_out(char* data_dest, int len) {
+void UsbEndpoint::start_out(int len) {
     out_desc->PCKSIZE.bit.MULTI_PACKET_SIZE = len;
     out_desc->PCKSIZE.bit.BYTE_COUNT = 0;
-    out_desc->ADDR.reg = (uint32_t)data_dest;
+    out_desc->ADDR.reg = (uint32_t)ep_out;
 
     dev->EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT0 | USB_DEVICE_EPINTFLAG_TRFAIL0;
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT0;
     dev->EPSTATUSCLR.reg = USB_DEVICE_EPSTATUS_BK0RDY;
 }
 
-void UsbEndpoint::start_in(const char* data_src, int len, bool zlp) {
+void UsbEndpoint::start_in(int len, bool zlp) {
     in_desc->PCKSIZE.bit.AUTO_ZLP = zlp;
     in_desc->PCKSIZE.bit.MULTI_PACKET_SIZE = 0;
     in_desc->PCKSIZE.bit.BYTE_COUNT = len;
-    in_desc->ADDR.reg = (uint32_t)data_src;
+    in_desc->ADDR.reg = (uint32_t)ep_in;
 
     dev->EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1 | USB_DEVICE_EPINTFLAG_TRFAIL1;
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT1;
@@ -84,11 +81,10 @@ uint8_t UsbEndpoint::calc_size(int size) {
     return 7;
 }
 
-void ControlEndpoint::enable_setup() {
+void ControlEndpoint::enable() {
+    UsbEndpoint::enable();
     address = 0;
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_RXSTP;
-    in_desc->ADDR.reg = (uint32_t)ep_in;
-    out_desc->ADDR.reg = (uint32_t)ep_out;
 }
 
 void ControlEndpoint::handle_setup() {
@@ -110,7 +106,7 @@ void ControlEndpoint::handle_setup() {
             debug("Setup: Get Status");
             ep_in[0] = 0;
             ep_in[1] = 0;
-            start_in(ep_in, 2);
+            start_in(2);
             start_out();
             return;
         case USB_REQ_ClearFeature:
@@ -118,7 +114,7 @@ void ControlEndpoint::handle_setup() {
         case USB_REQ_SetAddress:
             debug("Setup: Set Address");
             address = setup_packet.wValue & 0x7F;
-            start_in(ep_in, 0);
+            start_in(0);
             start_out();
             return;
         case USB_REQ_GetDescriptor:
@@ -127,17 +123,14 @@ void ControlEndpoint::handle_setup() {
                 start_stall();
                 return;
             }
-            start_in(ep_in, len);
+            start_in(len);
             start_out();
             debug("Sent Descriptor: %d", len);
-            debug("EP_IN:");
-            debug_hex(ep_in, 32);
-            debug("EP_IN END");
             return;
         case USB_REQ_GetConfiguration:
             debug("Setup: Get Configuration");
             ep_in[0] = (char)get_configuration();
-            start_in(ep_in, 1);
+            start_in(1);
             start_out();
             return;
         case USB_REQ_SetConfiguration:
@@ -146,7 +139,7 @@ void ControlEndpoint::handle_setup() {
                 start_stall();
                 return;
             }
-            start_in(ep_in, 0);
+            start_in(0);
             start_out();
             return;
         case USB_REQ_SetInterface:
@@ -155,7 +148,7 @@ void ControlEndpoint::handle_setup() {
                 start_stall();
                 return;
             }
-            start_in(ep_in, 0);
+            start_in(0);
             start_out();
             return;
         default:
