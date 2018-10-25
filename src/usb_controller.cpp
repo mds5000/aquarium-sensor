@@ -14,13 +14,13 @@
 
 UsbController usb;
 ControlEndpoint ep0;
-InterruptEndpoint app_in(0x01);
-InterruptEndpoint app_out(0x82);
+InterruptEndpoint app_out(0x01);
+InterruptEndpoint app_in(0x82);
 
 
 UsbController::UsbController() {
     /* Clear endpoint memory */
-    std::memset(ep_descriptors, 0, endpoints.size()*sizeof(UsbDeviceDescriptor));
+    std::memset(ep_descriptors, 0, (USB_NUM_ENDPOINTS + 1) * sizeof(UsbDeviceDescriptor));
 
     /* Setup SOF 1khz I/O */
     PORT->Group[0].PMUX[11].bit.PMUXO = 6;
@@ -75,20 +75,40 @@ UsbDeviceDescriptor* UsbController::get_descriptor(uint8_t num) {
 
 void UsbController::reset() {
     debug("USB Reset...");
+    address = 0;
+
     /* Reset Endpoints */
-<<<<<<< HEAD
+    ep0.reset();
     for (auto& ep: endpoints) {
         ep->reset();
-        ep->enable();
-=======
-    ep0.reset();
-    for (int i = 0; i < USB_NUM_ENDPOINTS; i++) {
-    //    endpoints[i]->reset();
->>>>>>> c14af423f04b389c4fbc8f03d6ac11209586ee86
     }
+
+    ep0.enable();
+    ep0.enable_setup();
 
 	USB->DEVICE.INTENSET.reg = USB_DEVICE_INTENSET_EORST;
     USB->DEVICE.CTRLA.bit.ENABLE = 1;
+}
+
+void UsbController::set_address(uint8_t addr) {
+    if (address == 0) {
+        address = addr;
+    } else {
+        debug("Updated USB Device Address (%d)", address);
+        USB->DEVICE.DADD.reg = USB_DEVICE_DADD_ADDEN | USB_DEVICE_DADD_DADD(address);
+        address = 0;
+    }
+}
+
+bool UsbController::set_configuration(uint16_t value) {
+    for (auto& ep : endpoints) {
+        ep->enable();
+        ep->start_out();
+    }
+    return true;
+}
+bool UsbController::set_interface(uint16_t index, uint16_t value) {
+    return true;
 }
 
 /**
@@ -107,37 +127,22 @@ void USB_Handler() {
 
     /* Handle Control Endpoint */
     if (epflags & 1) {
-        auto ep0 = static_cast<ControlEndpoint*>(usb.endpoints[0]);
 		uint32_t flags = USB->DEVICE.DeviceEndpoint[0].EPINTFLAG.reg;
 		USB->DEVICE.DeviceEndpoint[0].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1
                                                     | USB_DEVICE_EPINTFLAG_TRCPT0
                                                     | USB_DEVICE_EPINTFLAG_RXSTP;
-        if (flags & USB_DEVICE_EPINTFLAG_TRFAIL0)
-            debug("EP0: 0x%x: TRFAIL 0", flags);
-        if (flags & USB_DEVICE_EPINTFLAG_TRFAIL1)
-            debug("EP0: 0x%x: TRFAIL 1", flags);
-
-
-        debug("EP0: 0x%x", flags);
 
 		if (flags & USB_DEVICE_EPINTFLAG_RXSTP) {
-            ep0->handle_setup();
+            ep0.handle_setup();
         }
 
         if (flags & USB_DEVICE_EPINTFLAG_TRCPT1 && !(flags & USB_DEVICE_EPINTFLAG_TRFAIL1)) {
-<<<<<<< HEAD
-            if (ep0->address) {
-                ep0->commit_address();
-=======
-            if (usb.ep0.address) {
-                usb.ep0.commit_address();
->>>>>>> c14af423f04b389c4fbc8f03d6ac11209586ee86
-            }
+            usb.set_address();
         }
     }
 
     /* Handle Application Endpoints */
-    for (int i = 1; i <= usb.endpoints.size(); i++) {
+    for (size_t i = 1; i <= usb.endpoints.size(); i++) {
         if (epflags & 1 << i) {
             uint32_t flags = USB->DEVICE.DeviceEndpoint[i].EPINTFLAG.reg;
             USB->DEVICE.DeviceEndpoint[i].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1
@@ -147,10 +152,12 @@ void USB_Handler() {
 
             if (flags & USB_DEVICE_EPINTFLAG_TRCPT0 ) {
                 debug("OUT_%d", i);
+                usb.endpoints[i-1]->handle_out();
             }
 
             if (flags & USB_DEVICE_EPINTFLAG_TRCPT1 ) {
                 debug("IN_%d", i);
+                usb.endpoints[i-1]->handle_in();
             }
         }
     }

@@ -55,7 +55,7 @@ UsbEndpointDescriptor usb_out_endpoint_descriptor{
 UsbEndpointDescriptor usb_in_endpoint_descriptor{
     .bLength = sizeof(UsbEndpointDescriptor),
     .bDescriptorType = 0x05,
-    .bEndpointAddress = 0x81,
+    .bEndpointAddress = 0x82,
     .bmAttributes = 0x3, /* Interrupt Endpoint */
     .wMaxPacketSize = 64,
     .bInterval = 1

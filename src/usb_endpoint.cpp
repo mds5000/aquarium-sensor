@@ -21,9 +21,9 @@ void debug_hex(char *buf, int len) {
 
 UsbEndpoint::UsbEndpoint(uint8_t number, uint8_t type_, uint16_t size) 
   : ep_type(type_), buffer_size(size),
+    dev(&USB->DEVICE.DeviceEndpoint[number]),
     out_desc(&usb.get_descriptor(number)->DeviceDescBank[0]),
-    in_desc(&usb.get_descriptor(number)->DeviceDescBank[1]),
-    dev(&USB->DEVICE.DeviceEndpoint[number])
+    in_desc(&usb.get_descriptor(number)->DeviceDescBank[1])
 {}
 
 void UsbEndpoint::reset() {
@@ -43,6 +43,8 @@ void UsbEndpoint::enable() {
     dev->EPSTATUSSET.reg = USB_DEVICE_EPSTATUS_BK0RDY;
     dev->EPSTATUSCLR.reg = USB_DEVICE_EPSTATUS_STALLRQ(0x1)
                          | USB_DEVICE_EPSTATUS_DTGLOUT;
+
+    pending_out_bytes = 0;
 }
 
 void UsbEndpoint::start_out(int len) {
@@ -81,12 +83,19 @@ uint8_t UsbEndpoint::calc_size(int size) {
     return 7;
 }
 
-void ControlEndpoint::enable() {
-    UsbEndpoint::enable();
-    address = 0;
+void UsbEndpoint::handle_out() {
+    pending_out_bytes = out_desc->PCKSIZE.bit.BYTE_COUNT;
+    start_out();
+
+    debug("Recieved %d bytes", pending_out_bytes);
+}
+
+void UsbEndpoint::handle_in() {
+    debug("Sent bytes");
+}
+
+void ControlEndpoint::enable_setup() {
     dev->EPINTENSET.reg = USB_DEVICE_EPINTENSET_RXSTP;
-    in_desc->ADDR.reg = (uint32_t)ep_in;
-    out_desc->ADDR.reg = (uint32_t)ep_out;
 }
 
 void ControlEndpoint::handle_setup() {
@@ -106,20 +115,16 @@ void ControlEndpoint::handle_setup() {
     switch (setup_packet.bRequest) {
         case USB_REQ_GetStatus:
             debug("Setup: Get Status");
-<<<<<<< HEAD
             ep_in[0] = 0;
             ep_in[1] = 0;
             start_in(2);
-=======
-            start_in("\x00\x00", 2);
->>>>>>> c14af423f04b389c4fbc8f03d6ac11209586ee86
             start_out();
             return;
         case USB_REQ_ClearFeature:
         case USB_REQ_SetFeature:
         case USB_REQ_SetAddress:
             debug("Setup: Set Address");
-            address = setup_packet.wValue & 0x7F;
+            usb.set_address(setup_packet.wValue & 0x7F);
             start_in(0);
             start_out();
             return;
@@ -135,13 +140,13 @@ void ControlEndpoint::handle_setup() {
             return;
         case USB_REQ_GetConfiguration:
             debug("Setup: Get Configuration");
-            ep_in[0] = (char)get_configuration();
+            ep_in[0] = (char)usb.get_configuration();
             start_in(1);
             start_out();
             return;
         case USB_REQ_SetConfiguration:
             debug("Setup: Set Configuration");
-            if (!set_configuration(setup_packet.wValue)) {
+            if (!usb.set_configuration(setup_packet.wValue)) {
                 start_stall();
                 return;
             }
@@ -150,7 +155,7 @@ void ControlEndpoint::handle_setup() {
             return;
         case USB_REQ_SetInterface:
             debug("Setup: Set Interface");
-            if (!set_interface(setup_packet.wIndex, setup_packet.wValue)) {
+            if (!usb.set_interface(setup_packet.wIndex, setup_packet.wValue)) {
                 start_stall();
                 return;
             }
@@ -160,12 +165,6 @@ void ControlEndpoint::handle_setup() {
         default:
             debug("Bad SETUP Request.");
     }
-}
-
-void ControlEndpoint::commit_address() {
-    debug("Updated USB Device Address (%d)", address);
-    USB->DEVICE.DADD.reg = USB_DEVICE_DADD_ADDEN | USB_DEVICE_DADD_DADD(address);
-    address = 0;
 }
 
 uint8_t ControlEndpoint::generate_string_descriptor(uint16_t index) {
