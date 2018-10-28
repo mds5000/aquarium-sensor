@@ -41,4 +41,19 @@ private:
     uint8_t scratch_pad[9];
 };
 
+class TempController {
+public:
+    TempController() {}
+
+    run(uint32_t time_of_day) {
+    }
+
+    request_temperature() {
+    }
+
+private:
+    Ds18b20 sensor;
+    uint32_t conversion_start;
+};
+
 #endif /* TEMP_SENSOR_H */
