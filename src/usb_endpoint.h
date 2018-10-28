@@ -7,6 +7,7 @@
 #include "usb_protocol.h"
 
 constexpr auto EP_SIZE = 64;
+constexpr auto EP_MASK = 0x7F;
 
 
 class UsbEndpoint {
@@ -61,8 +62,8 @@ public:
     : UsbEndpoint(number, USB_EP_TYPE_INTERRUPT, EP_SIZE) {}
 
     bool pending() { return pending_out_bytes > 0; }
-    //bool write(char* message, int len);
-    //int read(char* dest);
+    int read(char* dest);
+    bool write(const char* message, int size);
 
 };
 

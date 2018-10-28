@@ -21,9 +21,9 @@ void debug_hex(char *buf, int len) {
 
 UsbEndpoint::UsbEndpoint(uint8_t number, uint8_t type_, uint16_t size) 
   : ep_type(type_), buffer_size(size),
-    dev(&USB->DEVICE.DeviceEndpoint[number]),
-    out_desc(&usb.get_descriptor(number)->DeviceDescBank[0]),
-    in_desc(&usb.get_descriptor(number)->DeviceDescBank[1])
+    dev(&USB->DEVICE.DeviceEndpoint[number & EP_MASK]),
+    out_desc(&usb.get_descriptor(number & EP_MASK)->DeviceDescBank[0]),
+    in_desc(&usb.get_descriptor(number & EP_MASK)->DeviceDescBank[1])
 {}
 
 void UsbEndpoint::reset() {
@@ -229,4 +229,20 @@ uint16_t ControlEndpoint::get_descriptor(uint16_t value) {
         default:
             return 0;
     }
+}
+
+int InterruptEndpoint::read(char *dest) {
+    auto read_bytes = pending_out_bytes;
+    std::memcpy(dest, ep_out, read_bytes);
+
+    pending_out_bytes = 0;
+    return read_bytes;
+}
+
+bool InterruptEndpoint::write(const char* message, int size) {
+    /* todo: check if ready */
+    std::memcpy(ep_in, message, size);
+    start_in(size);
+
+    return true;
 }

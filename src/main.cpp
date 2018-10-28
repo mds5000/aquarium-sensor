@@ -12,6 +12,7 @@
 #include "board.h"
 #include "temp_sensor.h"
 #include "usb_controller.h"
+#include "aquarium_types.h"
 
 
 #define NVM_CAL ((uint32_t*)(0x00806020UL))
@@ -100,10 +101,9 @@ int main(void)
 
     usb.initialize(USB_SPEED_LOW);
 
-    SEGGER_RTT_printf(0, "USB: %x\r\n", USB->DEVICE.CTRLA.reg);
-    SEGGER_RTT_printf(0, "USB-FSM: %x\r\n", USB->DEVICE.FSMSTATUS.reg);
 
 
+/*
     auto temp = Ds18b20(gpio_temp);
     temp.start_conversion();
     delay_ms(1000);
@@ -111,6 +111,8 @@ int main(void)
 
     int x = (val & 0x0F) * 625;
     SEGGER_RTT_printf(0, "OK: %d.%04d", val/16, x);
+*/
+    char buffer[64];
 
     while(true) {
         led_green.output(usb.is_attached());
@@ -121,6 +123,25 @@ int main(void)
         } else {
             if (!usb_vsense.read()) {
                 usb.detach();
+            }
+        }
+
+        if (app_out.pending()) {
+            int size = app_out.read(buffer);
+            if (size > 0) {
+                switch (buffer[0]) {
+                    case AQ_MSG_ECHO: 
+                        app_in.write(buffer, size);
+                        break;
+                    case AQ_MSG_LED: {
+                        auto msg = reinterpret_cast<message_led*>(buffer);
+                        led_green.output(msg->green_led);
+                        led_red.output(msg->red_led);
+                        break;
+                    }
+                    default:
+                        debug("Unknown Message: %d", buffer[0]);
+                }
             }
         }
 
